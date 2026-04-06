@@ -30,8 +30,72 @@
   // Command Hold — повторює останню команду в проміжках між MQTT пакетами
   let holdTimer = null;
   let lastHeldCmd = null;
-  const HOLD_INTERVAL_MS = 40;   // повторюємо команду кожні 40мс
+  const HOLD_INTERVAL_MS = 25;   // повторюємо команду кожні 25мс (частіше!)
   const HOLD_STOP_MS    = 300;   // зупиняємо якщо пакетів не було 300мс
+
+  /* ══════════════════════════════════════════════════════════════════
+     ЛОКАЛЬНА ІНТЕРПОЛЯЦІЯ НА HUB
+     Плавне наближення до нового значення без різких стрибків
+  ═════════════════════════════════════════════════════════════════════ */
+  let interpolationTimer = null;
+  let currentL = 0, currentR = 0, currentM3 = 0, currentM4 = 0;
+  let targetL = 0, targetR = 0, targetM3 = 0, targetM4 = 0;
+  const INTERPOLATION_SPEED = 0.25;  // наближаємось на 1/4 шляху за тік
+
+  function startInterpolation(newL, newR, newM3, newM4) {
+    targetL = newL;
+    targetR = newR;
+    targetM3 = newM3 || 0;
+    targetM4 = newM4 || 0;
+
+    // Якщо це СТОП (всі нулі) — миттєво
+    if (targetL === 0 && targetR === 0 && targetM3 === 0 && targetM4 === 0) {
+      currentL = currentR = currentM3 = currentM4 = 0;
+      if (interpolationTimer) {
+        clearInterval(interpolationTimer);
+        interpolationTimer = null;
+      }
+      if (window.isConnected && typeof window.sendDrivePacket === 'function') {
+        window.sendDrivePacket(0, 0, 0, 0);
+      }
+      return;
+    }
+
+    // Якщо вже інтерполюємо — просто оновимо таргет
+    if (interpolationTimer) return;
+
+    // Запускаємо інтерполяційний таймер
+    interpolationTimer = setInterval(function() {
+      // Плавно наближаємось на 1/4 шляху (INTERPOLATION_SPEED)
+      currentL += (targetL - currentL) * INTERPOLATION_SPEED;
+      currentR += (targetR - currentR) * INTERPOLATION_SPEED;
+      currentM3 += (targetM3 - currentM3) * INTERPOLATION_SPEED;
+      currentM4 += (targetM4 - currentM4) * INTERPOLATION_SPEED;
+
+      // Пишемо у BLE
+      if (window.isConnected && typeof window.sendDrivePacket === 'function') {
+        window.sendDrivePacket(
+          Math.round(currentL),
+          Math.round(currentR),
+          Math.round(currentM3),
+          Math.round(currentM4)
+        );
+      }
+
+      // Якщо досягли таргету — зупиняємо
+      if (Math.abs(currentL - targetL) < 1 &&
+          Math.abs(currentR - targetR) < 1 &&
+          Math.abs(currentM3 - targetM3) < 1 &&
+          Math.abs(currentM4 - targetM4) < 1) {
+        currentL = targetL;
+        currentR = targetR;
+        currentM3 = targetM3;
+        currentM4 = targetM4;
+        clearInterval(interpolationTimer);
+        interpolationTimer = null;
+      }
+    }, 25);  // Кожні 25мс (такий же як HOLD_INTERVAL_MS)
+  }
 
   function startCommandHold(l, r, m3, m4) {
     lastHeldCmd = { l, r, m3, m4, ts: Date.now() };
@@ -313,8 +377,7 @@
         const data = JSON.parse(text);
         if (data && data.type === 'drive') {
           const dl=Number(data.l||0),dr=Number(data.r||0),dm3=Number(data.m3||0),dm4=Number(data.m4||0);
-          window.sendDrivePacket(dl,dr,dm3,dm4);
-          startCommandHold(dl,dr,dm3,dm4);
+          startInterpolation(dl,dr,dm3,dm4);
         } else if (data && data.type === 'scratch') {
           if (typeof window.processScratchCommandLocal === 'function') window.processScratchCommandLocal(data.cmd);
         }
