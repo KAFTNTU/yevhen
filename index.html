@@ -1346,6 +1346,17 @@ select, option{
           </button>
         </div>
         <div class="p-5 space-y-4 flex-1 min-h-0 flex flex-col">
+          <!-- Room Code block -->
+          <div class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <span class="text-emerald-300 text-xs font-semibold flex items-center gap-1.5"><i class="fa-solid fa-link text-xs"></i> Room Code — спільний код для всіх пристроїв</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-2xl font-mono font-bold tracking-widest text-white select-all" id="iotRoomCodeDisplay">------</span>
+              <button type="button" title="Скопіювати" onclick="(function(){const c=document.getElementById('iotRoomCodeDisplay');if(c)navigator.clipboard&&navigator.clipboard.writeText(c.textContent);})()" class="ml-1 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-300 text-xs hover:bg-white/10">Копіювати</button>
+            </div>
+            <p class="text-slate-400 text-[11px] leading-tight">На іншому пристрої (Remote) введіть цей код → натисніть «Підключитись».</p>
+          </div>
           <div class="flex items-center justify-between gap-3">
             <div id="iotHubSummary" class="px-4 py-3 rounded-2xl border border-white/10 bg-white/5 text-slate-300 text-sm">
               Підключено машинок: 0
@@ -1433,6 +1444,22 @@ select, option{
                     <div id="iotDeviceList" class="hidden space-y-2 max-h-52 overflow-y-auto pr-1">
                         <!-- filled by IoT JS -->
                     </div>
+                    <!-- Remote Room Code input -->
+                    <div id="iotRemoteCodeRow" class="hidden rounded-xl border border-sky-500/30 bg-sky-500/8 px-3 py-2.5 flex flex-col gap-2">
+                        <p class="text-sky-300 text-[11px] font-semibold"><i class="fa-solid fa-link mr-1"></i>Room Code — введи код з Hub-пристрою</p>
+                        <div class="flex gap-2">
+                            <input id="iotRemoteCodeInput" type="text" maxlength="8" placeholder="XXXXXX"
+                                class="flex-1 bg-white/10 border border-white/15 rounded-lg px-3 py-1.5 text-white font-mono text-sm uppercase tracking-widest outline-none focus:border-sky-400"
+                                oninput="this.value=this.value.toUpperCase();this.dataset.userEdited='1'"
+                            />
+                            <button type="button"
+                                onclick="(function(){const v=document.getElementById('iotRemoteCodeInput').value.trim();if(v&&window.IoTBridge){window.IoTBridge.applyRoomCode(v);const btn=document.getElementById('iotRemoteJoinBtn');if(btn){btn.textContent='✓ Підключено';btn.style.background='#22c55e';setTimeout(()=>{btn.textContent='Підключитись';btn.style.background='';},2000);}}})()"
+                                id="iotRemoteJoinBtn"
+                                class="px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-500/30 text-sky-200 text-xs font-semibold whitespace-nowrap">
+                                Підключитись
+                            </button>
+                        </div>
+                    </div>
                     <div id="iotHubList" class="hidden space-y-2 max-h-52 overflow-y-auto pr-1">
                         <!-- filled by IoT Hub JS -->
                     </div>
@@ -1471,14 +1498,14 @@ select, option{
                             <i class="fa-solid fa-magnifying-glass"></i>
                             Сканувати
                         </button>
-                        <button id="iotHubBtn" onclick="window.IoTBridge && window.IoTBridge.openRemoteManager()"
+                        <button id="iotHubBtn" onclick="(function(){window.IoTBridge && window.IoTBridge.openRemoteManager();const r=document.getElementById('iotRemoteCodeRow');if(r)r.classList.remove('hidden');})()"
                             class="px-3 h-11 rounded-full font-semibold text-xs transition-all flex items-center justify-center gap-1 text-white"
                             style="background: linear-gradient(135deg, #38bdf8, #0ea5e9); box-shadow: 0 6px 16px rgba(14,165,233,0.35)">
                             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#a7f3d0"></span>
                             IoT
                         </button>
                     </div>
-                    <button id="iotBigBtn" onclick="window.IoTBridge && window.IoTBridge.enableRemoteMode()"
+                    <button id="iotBigBtn" onclick="(function(){window.IoTBridge && window.IoTBridge.enableRemoteMode();const r=document.getElementById('iotRemoteCodeRow');if(r)r.classList.remove('hidden');})()"
                         class="hidden w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 text-white"
                         style="background: linear-gradient(135deg, #38bdf8, #0ea5e9); box-shadow: 0 8px 20px rgba(14,165,233,0.35)">
                         <i class="fa-solid fa-cloud"></i>
