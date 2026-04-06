@@ -314,7 +314,13 @@
         if (data && data.type === 'drive') {
           const dl=Number(data.l||0),dr=Number(data.r||0),dm3=Number(data.m3||0),dm4=Number(data.m4||0);
           window.sendDrivePacket(dl,dr,dm3,dm4);
-          startCommandHold(dl,dr,dm3,dm4);
+          // Джойстик 0 — моментально зупиняємо hold, не повторюємо
+          if (dl === 0 && dr === 0 && dm3 === 0 && dm4 === 0) {
+            if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+            lastHeldCmd = null;
+          } else {
+            startCommandHold(dl,dr,dm3,dm4);
+          }
         } else if (data && data.type === 'scratch') {
           if (typeof window.processScratchCommandLocal === 'function') window.processScratchCommandLocal(data.cmd);
         }
@@ -326,10 +332,20 @@
 
   function publishDrive(l, r) {
     if (mode !== 'remote' || !mqttClient || !mqttConnected || !selectedRemoteId) return;
+    const isStop = (l === 0 && r === 0);
     const now = Date.now();
-    if (now - lastDrivePublish < 40) return;
+    // Зупинку шлемо ЗАВЖДИ без throttle — моментальний стоп
+    if (!isStop && now - lastDrivePublish < 40) return;
     lastDrivePublish = now;
     mqttClient.publish(TOPIC_CONTROL + selectedRemoteId, JSON.stringify({type:'drive',l,r,ts:now}), {qos:0,retain:false});
+    // Для зупинки шлемо двічі щоб точно дійшло
+    if (isStop) {
+      setTimeout(function() {
+        if (mqttClient && mqttConnected) {
+          mqttClient.publish(TOPIC_CONTROL + selectedRemoteId, JSON.stringify({type:'drive',l:0,r:0,ts:Date.now()}), {qos:0,retain:false});
+        }
+      }, 50);
+    }
   }
 
   function publishScratch(cmd) {
