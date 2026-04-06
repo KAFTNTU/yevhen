@@ -37,64 +37,30 @@
      ЛОКАЛЬНА ІНТЕРПОЛЯЦІЯ НА HUB
      Плавне наближення до нового значення без різких стрибків
   ═════════════════════════════════════════════════════════════════════ */
-  let interpolationTimer = null;
-  let currentL = 0, currentR = 0, currentM3 = 0, currentM4 = 0;
-  let targetL = 0, targetR = 0, targetM3 = 0, targetM4 = 0;
-  const INTERPOLATION_SPEED = 0.25;  // наближаємось на 1/4 шляху за тік
+  /* COMMAND BUFFER — запамятовує і повторює команди */
+  let cmdBuffer = { l: 0, r: 0, m3: 0, m4: 0, ts: 0 };
+  let cmdBufferTimer = null;
 
-  function startInterpolation(newL, newR, newM3, newM4) {
-    targetL = newL;
-    targetR = newR;
-    targetM3 = newM3 || 0;
-    targetM4 = newM4 || 0;
-
-    // Якщо це СТОП (всі нулі) — миттєво
-    if (targetL === 0 && targetR === 0 && targetM3 === 0 && targetM4 === 0) {
-      currentL = currentR = currentM3 = currentM4 = 0;
-      if (interpolationTimer) {
-        clearInterval(interpolationTimer);
-        interpolationTimer = null;
-      }
-      if (window.isConnected && typeof window.sendDrivePacket === 'function') {
-        window.sendDrivePacket(0, 0, 0, 0);
+  function updateCommandBuffer(l, r, m3, m4) {
+    cmdBuffer = { l, r, m3, m4, ts: Date.now() };
+    sendBufferedCommand();
+    
+    if (l === 0 && r === 0 && m3 === 0 && m4 === 0) {
+      if (cmdBufferTimer) {
+        clearInterval(cmdBufferTimer);
+        cmdBufferTimer = null;
       }
       return;
     }
 
-    // Якщо вже інтерполюємо — просто оновимо таргет
-    if (interpolationTimer) return;
+    if (cmdBufferTimer) return;
+    cmdBufferTimer = setInterval(sendBufferedCommand, 25);
+  }
 
-    // Запускаємо інтерполяційний таймер
-    interpolationTimer = setInterval(function() {
-      // Плавно наближаємось на 1/4 шляху (INTERPOLATION_SPEED)
-      currentL += (targetL - currentL) * INTERPOLATION_SPEED;
-      currentR += (targetR - currentR) * INTERPOLATION_SPEED;
-      currentM3 += (targetM3 - currentM3) * INTERPOLATION_SPEED;
-      currentM4 += (targetM4 - currentM4) * INTERPOLATION_SPEED;
-
-      // Пишемо у BLE
-      if (window.isConnected && typeof window.sendDrivePacket === 'function') {
-        window.sendDrivePacket(
-          Math.round(currentL),
-          Math.round(currentR),
-          Math.round(currentM3),
-          Math.round(currentM4)
-        );
-      }
-
-      // Якщо досягли таргету — зупиняємо
-      if (Math.abs(currentL - targetL) < 1 &&
-          Math.abs(currentR - targetR) < 1 &&
-          Math.abs(currentM3 - targetM3) < 1 &&
-          Math.abs(currentM4 - targetM4) < 1) {
-        currentL = targetL;
-        currentR = targetR;
-        currentM3 = targetM3;
-        currentM4 = targetM4;
-        clearInterval(interpolationTimer);
-        interpolationTimer = null;
-      }
-    }, 25);  // Кожні 25мс (такий же як HOLD_INTERVAL_MS)
+  function sendBufferedCommand() {
+    if (window.isConnected && typeof window.sendDrivePacket === 'function') {
+      window.sendDrivePacket(cmdBuffer.l, cmdBuffer.r, cmdBuffer.m3, cmdBuffer.m4);
+    }
   }
 
   function startCommandHold(l, r, m3, m4) {
@@ -377,7 +343,7 @@
         const data = JSON.parse(text);
         if (data && data.type === 'drive') {
           const dl=Number(data.l||0),dr=Number(data.r||0),dm3=Number(data.m3||0),dm4=Number(data.m4||0);
-          startInterpolation(dl,dr,dm3,dm4);
+          updateCommandBuffer(dl,dr,dm3,dm4);
         } else if (data && data.type === 'scratch') {
           if (typeof window.processScratchCommandLocal === 'function') window.processScratchCommandLocal(data.cmd);
         }
