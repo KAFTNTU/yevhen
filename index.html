@@ -2204,6 +2204,8 @@ const SLIP_END = 0xC0;
         async function sendDrivePacket(m1, m2, m3, m4) {
             if (!isConnected && !window.isSimulating) return;
             window.motorState = { m1, m2, m3, m4 };
+            // IoT: дублюємо команду через MQTT
+            if (window.onDriveUpdate) { try { window.onDriveUpdate({ l: m1, r: m2, m3: m3||0, m4: m4||0, ts: Date.now() }); } catch(e) {} }
 
             if (window._isRecordingTrack) {
                 let now = new Date().getTime();
@@ -2262,6 +2264,12 @@ const SLIP_END = 0xC0;
         function openBtModal() {
             const modal = document.getElementById('btModal');
             modal.classList.remove('hidden');
+            // Ховаємо Room Code — він лише для IoT режиму
+            const rcRow = document.getElementById('iotRemoteCodeRow');
+            if (rcRow) rcRow.classList.add('hidden');
+            // Підставляємо поточний код
+            const rcInp = document.getElementById('iotRemoteCodeInput');
+            if (rcInp && window.IoTBridge) { rcInp.value = window.IoTBridge.getRoomCode(); rcInp.dataset.userEdited = ''; }
             if (isConnected) {
                 showBtConnectedState(device ? device.name : 'Пристрій');
             } else {
