@@ -26,6 +26,30 @@
   let selectedRemoteId = null;
   let statusTimer = null;
   let lastDrivePublish = 0;
+
+  // Command Hold — повторює останню команду в проміжках між MQTT пакетами
+  let holdTimer = null;
+  let lastHeldCmd = null;
+  const HOLD_INTERVAL_MS = 40;   // повторюємо команду кожні 40мс
+  const HOLD_STOP_MS    = 300;   // зупиняємо якщо пакетів не було 300мс
+
+  function startCommandHold(l, r, m3, m4) {
+    lastHeldCmd = { l, r, m3, m4, ts: Date.now() };
+    if (holdTimer) return;
+    holdTimer = setInterval(function() {
+      if (!lastHeldCmd) return;
+      if (Date.now() - lastHeldCmd.ts > HOLD_STOP_MS) {
+        if (window.isConnected && typeof window.sendDrivePacket === 'function') {
+          window.sendDrivePacket(0, 0, 0, 0);
+        }
+        clearInterval(holdTimer); holdTimer = null; lastHeldCmd = null;
+        return;
+      }
+      if (window.isConnected && typeof window.sendDrivePacket === 'function') {
+        window.sendDrivePacket(lastHeldCmd.l, lastHeldCmd.r, lastHeldCmd.m3, lastHeldCmd.m4);
+      }
+    }, HOLD_INTERVAL_MS);
+  }
   const lastRemoteById = {};
 
   const elBtActionRow   = document.getElementById('btActionRow');
@@ -288,7 +312,9 @@
       try {
         const data = JSON.parse(text);
         if (data && data.type === 'drive') {
-          window.sendDrivePacket(Number(data.l||0), Number(data.r||0), Number(data.m3||0), Number(data.m4||0));
+          const dl=Number(data.l||0),dr=Number(data.r||0),dm3=Number(data.m3||0),dm4=Number(data.m4||0);
+          window.sendDrivePacket(dl,dr,dm3,dm4);
+          startCommandHold(dl,dr,dm3,dm4);
         } else if (data && data.type === 'scratch') {
           if (typeof window.processScratchCommandLocal === 'function') window.processScratchCommandLocal(data.cmd);
         }
@@ -301,7 +327,7 @@
   function publishDrive(l, r) {
     if (mode !== 'remote' || !mqttClient || !mqttConnected || !selectedRemoteId) return;
     const now = Date.now();
-    if (now - lastDrivePublish < 80) return;
+    if (now - lastDrivePublish < 40) return;
     lastDrivePublish = now;
     mqttClient.publish(TOPIC_CONTROL + selectedRemoteId, JSON.stringify({type:'drive',l,r,ts:now}), {qos:0,retain:false});
   }
